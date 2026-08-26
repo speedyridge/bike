@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>BikeNav Pro</title>
     
-    <!-- PWA Settings -->
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#000000">
@@ -17,46 +16,40 @@
     <style>
         :root { --bg: #000; --card: #161616; --accent: #00e676; --blue: #2979ff; --error: #ff5252; }
         
-        /* 1. NUCLEAR RESET: Kill every possible margin/gap */
         * { box-sizing: border-box; margin: 0 !important; padding: 0 !important; }
         
         html, body { 
-            height: 100dvh; /* Dynamic Viewport Height */
+            height: 100dvh; 
             width: 100vw;
             background: #000; 
             overflow: hidden;
             display: grid;
-            grid-template-rows: 62% 38%; /* Strict grid to prevent gaps */
+            grid-template-rows: 62% 38%; 
         }
         
-        #map { 
-            width: 100%; 
-            height: 100%;
-            background: #111;
-            z-index: 1;
-        } 
-        
-        #display-area { 
-            width: 100%; 
-            height: 100%;
-            background: #000; 
-            position: relative; 
-            border-top: 1px solid #222;
-            z-index: 2;
-        }
-
+        #map { width: 100%; height: 100%; background: #111; z-index: 1; } 
+        #display-area { width: 100%; height: 100%; background: #000; position: relative; border-top: 1px solid #222; z-index: 2; }
         #elevation-div { height: 100%; width: 100%; background: #000; }
 
-        /* 2. THE 'X' BUTTON DELETE: Target every known class name */
-        .elevation-control .close-button, 
-        .elevation-control-close,
-        .elevation-toggle,
-        .leaflet-control-elevation .close-button { 
+        /* --- THE "X" REMOVAL - NUCLEAR CSS --- */
+        .elevation-control .elevation-toggle,
+        .elevation-control .close-button,
+        .elevation-control .elevation-control-close,
+        .elevation-control .leaflet-control-elevation-toggle,
+        .leaflet-control-elevation .close-button,
+        .leaflet-control-elevation .elevation-toggle,
+        a.elevation-toggle,
+        a.close-button,
+        .elevation-toggle-icon { 
             display: none !important; 
             visibility: hidden !important; 
+            opacity: 0 !important;
+            width: 0 !important;
+            height: 0 !important;
+            pointer-events: none !important;
         }
+        /* -------------------------------------- */
 
-        /* 3. FLOATING DASHBOARD (Top Left) */
         #live-dashboard {
             position: fixed; top: 10px; left: 10px; z-index: 3000;
             display: flex; flex-direction: column; gap: 6px; pointer-events: none;
@@ -67,12 +60,8 @@
         }
         .live-val { font-weight: bold; color: var(--accent); font-size: 1.1rem; }
 
-        /* 4. CONTROLS (Right Side - SHIFTED UP) */
         #controls {
-            position: fixed; 
-            top: 20%; /* Moved much higher up the screen */
-            right: 12px; 
-            z-index: 4000;
+            position: fixed; top: 20%; right: 12px; z-index: 4000;
             display: flex; flex-direction: column; gap: 12px;
         }
         .btn {
@@ -86,7 +75,6 @@
         #startBtn { background: var(--accent); color: #000; }
         #stopBtn { background: var(--error); color: #fff; display: none; }
 
-        /* 5. TEXT VIEW */
         #text-summary-view { 
             height: 100%; width: 100%; display: none;
             grid-template-columns: 1fr 1fr; gap: 8px; padding: 15px !important;
@@ -133,34 +121,34 @@
         let map, elControl, userMarker, watchId, polyline, recordedPoints = [];
         let isRecording = false, followMode = true, currentLatlng = null, totalDist = 0;
 
-        // 1. Initialize Map
         map = L.map('map', { zoomControl: false, attributionControl: false }).setView([51.5, -0.1], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-        // 2. Initialize Elevation (No Summary, Clean)
         elControl = L.control.elevation({
             container: "#elevation-div",
             theme: "dark-theme",
             detached: true,
             summary: false,
             responsive: true,
-            maintainAspectRatio: false
+            maintainAspectRatio: false,
+            closeBtn: false // Plugin-native command to hide the 'X'
         }).addTo(map);
 
-        // 3. THE 'X' BUTTON JANITOR (Deletes the button as soon as it's created)
+        // Mutation Observer to instantly delete the 'X' if the plugin tries to force it back
         const observer = new MutationObserver(() => {
-            const xButton = document.querySelector('.close-button') || document.querySelector('.elevation-control-close');
-            if (xButton) xButton.remove();
+            const targets = ['.close-button', '.elevation-toggle', '.elevation-control-close'];
+            targets.forEach(t => {
+                const el = document.querySelector(t);
+                if (el) el.remove();
+            });
         });
         observer.observe(document.body, { childList: true, subtree: true });
 
-        // View Toggling
         let graphVisible = true;
         document.getElementById('toggleViewBtn').onclick = () => {
             graphVisible = !graphVisible;
             document.getElementById('elevation-div').style.display = graphVisible ? 'block' : 'none';
             document.getElementById('text-summary-view').style.display = graphVisible ? 'none' : 'grid';
-            document.getElementById('toggleViewBtn').innerText = graphVisible ? '📊' : '📝';
         };
 
         function initGPS() {
@@ -168,14 +156,11 @@
                 const { latitude, longitude, altitude, speed } = pos.coords;
                 const now = [latitude, longitude];
                 document.getElementById('speed').innerText = (speed * 3.6 || 0).toFixed(1);
-
                 if (!userMarker) {
                     userMarker = L.circleMarker(now, {radius: 8, color: 'white', fillColor: '#2979ff', fillOpacity: 1, weight: 2}).addTo(map);
                     map.setView(now, 17);
                 } else { userMarker.setLatLng(now); }
-
                 if (followMode) map.panTo(now);
-
                 if (isRecording) {
                     if (currentLatlng) {
                         totalDist += (map.distance(currentLatlng, now) / 1000);
