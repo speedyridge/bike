@@ -13,9 +13,57 @@
         body, html { margin: 0; padding: 0; height: 100%; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; }
         
         #map { height: 60vh; width: 100%; background: #222; } 
-        #elevation-div { height: 40vh; width: 100%; background: #1a1a1a; position: relative; }
+        #elevation-div { height: 40vh; width: 100%; background: #111; overflow-y: auto; }
         
-        /* Large Text Stats Overlay */
+        /* --- THE FIX: FORMATTING THE SUMMARY TEXT --- */
+        .elevation-summary { 
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important; /* Two columns */
+            gap: 15px !important;
+            padding: 20px !important;
+            background: #111 !important;
+            border: none !important;
+        }
+
+        /* Hide the annoying dashes between items */
+        .elevation-summary .summarydivider { display: none !important; }
+
+        /* Style each data block (Length, Time, etc) */
+        .elevation-summary > span {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            background: #1a1a1a;
+            padding: 10px;
+            border-radius: 8px;
+            border-bottom: 2px solid #333;
+        }
+
+        /* Labels (e.g., "Total Length") */
+        .elevation-summary .summarylabel { 
+            font-size: 0.65rem !important; 
+            text-transform: uppercase !important; 
+            color: #888 !important; 
+            margin-bottom: 4px !important;
+            display: block !important;
+        }
+
+        /* Values (e.g., "12.5 km") */
+        .elevation-summary .summaryvalue { 
+            font-size: 1.3rem !important; 
+            font-weight: bold !important; 
+            color: var(--accent) !important;
+            display: block !important;
+        }
+
+        /* Make the first two (Length/Time) span full width if you want, 
+           or leave as a grid for symmetry */
+        /* .elevation-summary > span:first-child { grid-column: span 2; } */
+
+        /* ------------------------------------------- */
+
+        /* Stats Overlay */
         #stats {
             position: absolute; top: env(safe-area-inset-top, 10px); left: 10px; z-index: 1000;
             display: flex; gap: 8px; pointer-events: none;
@@ -24,28 +72,6 @@
         .val { font-size: 1.2rem; font-weight: bold; display: block; color: var(--accent); }
         .lbl { font-size: 0.6rem; text-transform: uppercase; opacity: 0.7; }
 
-        /* Elevation Summary Text Formatting */
-        .elevation-summary { 
-            font-size: 14px !important; 
-            color: #ccc !important; 
-            background: none !important;
-            padding: 10px !important;
-            text-align: center;
-        }
-        .elevation-summary .summaryvalue { 
-            font-weight: bold; 
-            color: var(--accent); 
-            font-size: 16px;
-        }
-        .elevation-summary .summarylabel { 
-            margin-right: 5px; 
-            color: #999;
-        }
-
-        /* Tooltip styling (when clicking graph) */
-        .elevation-control .background { fill: rgba(30, 30, 30, 0.8); }
-        .elevation-control .point { fill: var(--accent); stroke: #fff; }
-        
         #controls {
             position: absolute; bottom: 42vh; right: 12px; z-index: 1000;
             display: flex; flex-direction: column; gap: 12px;
@@ -59,13 +85,6 @@
         #startBtn { background: var(--accent); color: black; }
         #stopBtn { background: var(--error); color: white; display: none; }
         #fileBtn { background: #333; color: white; }
-
-        .rec-dot {
-            position: absolute; top: 20px; right: 20px; width: 12px; height: 12px;
-            background: red; border-radius: 50%; display: none; z-index: 1001;
-            box-shadow: 0 0 10px red; animation: blink 1s infinite;
-        }
-        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.2; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
@@ -74,8 +93,6 @@
         <div class="stat-card"><span id="speed" class="val">0.0</span><span class="lbl">km/h</span></div>
         <div class="stat-card"><span id="dist" class="val">0.00</span><span class="lbl">km</span></div>
     </div>
-
-    <div id="recDot" class="rec-dot"></div>
 
     <div id="controls">
         <label class="btn" id="fileBtn">📂<input type="file" id="fileInput" style="display:none" accept=".gpx"></label>
@@ -93,48 +110,31 @@
     <script src="https://unpkg.com/@raruto/leaflet-elevation/dist/leaflet-elevation.js"></script>
 
     <script>
-        let map, elControl, watchId, userMarker, polyline;
-        let recordedPoints = []; 
-        let totalDist = 0;
-        let isRecording = false;
-        let lastLatlng = null;
+        let map, elControl, watchId, userMarker, polyline, recordedPoints = [], totalDist = 0, isRecording = false, lastLatlng = null;
 
-        // 1. Initialize Map
         map = L.map('map', { zoomControl: false, attributionControl: false }).setView([0,0], 2);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-        // 2. Initialize Elevation Profile with CUSTOM TEXT FORMATTING
         elControl = L.control.elevation({
             container: "#elevation-div",
             theme: "dark-theme",
             detached: true,
+            summary: 'multiline', // This is what creates the text boxes
             elevationData: "ele",
-            summary: 'multiline', // Shows nice text labels at bottom
-            hoverNumber: {
-                decimalsX: 1, // Distance to 1 decimal point (e.g. 1.2 km)
-                decimalsY: 0, // Altitude to whole numbers (e.g. 150 m)
-                formatter: undefined 
-            },
-            // Custom labels for the summary
-            imperial: false,
-            acceleration: false,
-            slope: false,
-            speed: false,
+            time: true,
+            distance: true,
         }).addTo(map);
 
-        // 3. GPS Logic
         function initGPS() {
             watchId = navigator.geolocation.watchPosition(pos => {
                 const { latitude, longitude, altitude, speed } = pos.coords;
                 const now = [latitude, longitude];
                 lastLatlng = now;
                 document.getElementById('speed').innerText = (speed * 3.6 || 0).toFixed(1);
-                
                 if (!userMarker) {
                     userMarker = L.circleMarker(now, {radius: 9, color: 'white', fillColor: '#2979ff', fillOpacity: 1, weight: 3}).addTo(map);
                     map.setView(now, 16);
                 } else { userMarker.setLatLng(now); }
-
                 if (isRecording) {
                     if(recordedPoints.length > 0) {
                         const prev = recordedPoints[recordedPoints.length - 1];
@@ -147,27 +147,19 @@
             }, null, { enableHighAccuracy: true });
         }
 
-        // Buttons
         document.getElementById('locateBtn').onclick = () => { if (lastLatlng) map.flyTo(lastLatlng, 16); };
-
         document.getElementById('startBtn').onclick = () => {
-            isRecording = true;
-            recordedPoints = [];
-            totalDist = 0;
-            document.getElementById('dist').innerText = "0.00";
+            isRecording = true; recordedPoints = []; totalDist = 0;
             if(polyline) map.removeLayer(polyline);
             polyline = L.polyline([], {color: '#00e676', weight: 6}).addTo(map);
             document.getElementById('startBtn').style.display = 'none';
             document.getElementById('stopBtn').style.display = 'flex';
-            document.getElementById('recDot').style.display = 'block';
         };
-
         document.getElementById('stopBtn').onclick = () => {
             if (confirm("Stop recording?")) {
                 isRecording = false;
                 document.getElementById('startBtn').style.display = 'flex';
                 document.getElementById('stopBtn').style.display = 'none';
-                document.getElementById('recDot').style.display = 'none';
                 if(recordedPoints.length > 5 && confirm("Save GPX?")) downloadGPX(recordedPoints);
             }
         };
@@ -192,7 +184,6 @@
             };
             reader.readAsText(e.target.files[0]);
         };
-
         initGPS();
     </script>
 </body>
