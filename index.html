@@ -5,17 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>BikeNav Pro</title>
     
+    <!-- Link to the Manifest -->
+    <link rel="manifest" href="manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#000000">
-    <link rel="manifest" href="data:application/manifest+json;base64,ewogICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICJuYW1lIjogIkJpa2VOYXYiLAogICJzaG9ydF9uYW1lIjogIkJpa2VOYXYiLAogICJzdGFydF91cmwiOiAiLiIKfQ==">
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/@raruto/leaflet-elevation/dist/leaflet-elevation.css" />
 
     <style>
         :root { --bg: #000; --card: #161616; --accent: #00e676; --blue: #2979ff; --error: #ff5252; }
-        
         * { box-sizing: border-box; margin: 0 !important; padding: 0 !important; }
         
         html, body { 
@@ -31,24 +31,16 @@
         #display-area { width: 100%; height: 100%; background: #000; position: relative; border-top: 1px solid #222; z-index: 2; }
         #elevation-div { height: 100%; width: 100%; background: #000; }
 
-        /* --- THE "X" REMOVAL - NUCLEAR CSS --- */
+        /* THE "X" REMOVAL */
         .elevation-control .elevation-toggle,
         .elevation-control .close-button,
         .elevation-control .elevation-control-close,
-        .elevation-control .leaflet-control-elevation-toggle,
         .leaflet-control-elevation .close-button,
-        .leaflet-control-elevation .elevation-toggle,
-        a.elevation-toggle,
-        a.close-button,
-        .elevation-toggle-icon { 
+        a.close-button { 
             display: none !important; 
             visibility: hidden !important; 
-            opacity: 0 !important;
-            width: 0 !important;
-            height: 0 !important;
             pointer-events: none !important;
         }
-        /* -------------------------------------- */
 
         #live-dashboard {
             position: fixed; top: 10px; left: 10px; z-index: 3000;
@@ -56,7 +48,7 @@
         }
         .live-card { 
             background: rgba(0,0,0,0.8); padding: 8px 12px !important; border-radius: 8px; 
-            border-left: 4px solid var(--accent); font-family: sans-serif;
+            border-left: 4px solid var(--accent); font-family: sans-serif; color: white;
         }
         .live-val { font-weight: bold; color: var(--accent); font-size: 1.1rem; }
 
@@ -88,8 +80,8 @@
 <body>
 
     <div id="live-dashboard">
-        <div class="live-card" style="color:white;"><span id="speed" class="live-val">0.0</span> km/h</div>
-        <div class="live-card" style="color:white;"><span id="live-dist" class="live-val">0.00</span> km</div>
+        <div class="live-card"><span id="speed" class="live-val">0.0</span> km/h</div>
+        <div class="live-card"><span id="live-dist" class="live-val">0.00</span> km</div>
     </div>
 
     <div id="controls">
@@ -101,7 +93,6 @@
     </div>
 
     <div id="map"></div>
-    
     <div id="display-area">
         <div id="elevation-div"></div>
         <div id="text-summary-view">
@@ -118,6 +109,11 @@
     <script src="https://unpkg.com/@raruto/leaflet-elevation/dist/leaflet-elevation.js"></script>
 
     <script>
+        // REGISTER SERVICE WORKER (This enables the Install button)
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js');
+        }
+
         let map, elControl, userMarker, watchId, polyline, recordedPoints = [];
         let isRecording = false, followMode = true, currentLatlng = null, totalDist = 0;
 
@@ -125,30 +121,22 @@
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         elControl = L.control.elevation({
-            container: "#elevation-div",
-            theme: "dark-theme",
-            detached: true,
-            summary: false,
-            responsive: true,
-            maintainAspectRatio: false,
-            closeBtn: false // Plugin-native command to hide the 'X'
+            container: "#elevation-div", theme: "dark-theme", detached: true,
+            summary: false, responsive: true, maintainAspectRatio: false, closeBtn: false
         }).addTo(map);
 
-        // Mutation Observer to instantly delete the 'X' if the plugin tries to force it back
+        // Delete 'X' if it appears
         const observer = new MutationObserver(() => {
-            const targets = ['.close-button', '.elevation-toggle', '.elevation-control-close'];
-            targets.forEach(t => {
-                const el = document.querySelector(t);
-                if (el) el.remove();
-            });
+            const el = document.querySelector('.close-button') || document.querySelector('.elevation-control-close');
+            if (el) el.remove();
         });
         observer.observe(document.body, { childList: true, subtree: true });
 
-        let graphVisible = true;
         document.getElementById('toggleViewBtn').onclick = () => {
-            graphVisible = !graphVisible;
-            document.getElementById('elevation-div').style.display = graphVisible ? 'block' : 'none';
-            document.getElementById('text-summary-view').style.display = graphVisible ? 'none' : 'grid';
+            const g = document.getElementById('elevation-div'), t = document.getElementById('text-summary-view');
+            const isG = g.style.display !== 'none';
+            g.style.display = isG ? 'none' : 'block';
+            t.style.display = isG ? 'grid' : 'none';
         };
 
         function initGPS() {
@@ -175,15 +163,12 @@
         }
 
         document.getElementById('locateBtn').onclick = () => {
-            followMode = true;
-            document.getElementById('locateBtn').style.background = "var(--blue)";
+            followMode = true; document.getElementById('locateBtn').style.background = "var(--blue)";
             document.getElementById('locateBtn').style.color = "white";
             if (currentLatlng) map.flyTo(currentLatlng, 17);
         };
-        
         map.on('dragstart', () => {
-            followMode = false;
-            document.getElementById('locateBtn').style.background = "white";
+            followMode = false; document.getElementById('locateBtn').style.background = "white";
             document.getElementById('locateBtn').style.color = "black";
         });
 
@@ -207,8 +192,7 @@
         document.getElementById('fileInput').onchange = (e) => {
             const reader = new FileReader();
             reader.onload = (evt) => {
-                elControl.clear();
-                elControl.load(evt.target.result);
+                elControl.clear(); elControl.load(evt.target.result);
                 elControl.on('eledata_loaded', (data) => {
                     const s = data.track_info;
                     document.getElementById('txt-dist').innerText = s.distance.toFixed(2) + " km";
