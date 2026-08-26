@@ -2,189 +2,107 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Bike Nav PWA</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bike Nav</title>
     
-    <!-- PWA Manifest & Theme -->
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#121212">
-    
-    <!-- External CSS (CDNs) -->
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Elevation CSS -->
     <link rel="stylesheet" href="https://unpkg.com/@raruto/leaflet-elevation/dist/leaflet-elevation.css" />
-    
-    <style>
-        :root { --bg: #121212; --text: #e0e0e0; --accent: #00e676; }
-        body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: var(--bg); color: var(--text); font-family: sans-serif; overflow: hidden; }
-        
-        #map { height: 70%; width: 100%; }
-        #elevation-div { height: 30%; background: #1a1a1a; }
-        
-        /* Dashboard Overlay */
-        #dashboard {
-            position: absolute; top: 10px; left: 10px; right: 10px;
-            display: flex; justify-content: space-between;
-            z-index: 1000; pointer-events: none;
-        }
-        .stat-box {
-            background: rgba(0,0,0,0.8); padding: 8px 12px; border-radius: 8px;
-            text-align: center; border: 1px solid #333; pointer-events: auto;
-        }
-        .stat-val { font-size: 1.2rem; font-weight: bold; color: var(--accent); }
-        .stat-label { font-size: 0.7rem; text-transform: uppercase; opacity: 0.7; }
 
-        /* Controls */
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; background: #121212; color: white; overflow: hidden; }
+        /* Give the map a specific height */
+        #map { height: 70vh; width: 100%; background: #222; } 
+        #elevation-div { height: 30vh; width: 100%; background: #1a1a1a; }
+        
         #controls {
-            position: absolute; bottom: 32%; right: 10px;
-            display: flex; flex-direction: column; gap: 10px; z-index: 1000;
+            position: absolute; top: 10px; right: 10px; z-index: 1000;
+            display: flex; flex-direction: column; gap: 10px;
         }
         .btn {
-            background: var(--accent); color: black; border: none; padding: 12px;
-            border-radius: 50%; width: 50px; height: 50px; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-            font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            background: #00e676; color: black; border: none; padding: 15px;
+            border-radius: 50%; font-size: 1.2rem; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.5);
         }
-        input[type="file"] { display: none; }
-        
-        /* Fullscreen PWA immersive mode fix for Samsung A70 camera cutout */
-        @supports (padding-top: env(safe-area-inset-top)) {
-            #dashboard { top: calc(10px + env(safe-area-inset-top)); }
+        #stats {
+            position: absolute; top: 10px; left: 10px; z-index: 1000;
+            background: rgba(0,0,0,0.7); padding: 10px; border-radius: 8px; font-family: sans-serif;
         }
     </style>
 </head>
 <body>
 
-    <div id="dashboard">
-        <div class="stat-box">
-            <div id="speed" class="stat-val">0.0</div>
-            <div class="stat-label">km/h</div>
-        </div>
-        <div class="stat-box">
-            <div id="dist-rem" class="stat-val">--</div>
-            <div class="stat-label">Remaining</div>
-        </div>
-        <div class="stat-box">
-            <div id="ele" class="stat-val">--</div>
-            <div class="stat-label">Altitude</div>
-        </div>
+    <div id="stats">
+        <div id="speed">Speed: 0.0 km/h</div>
+        <div id="alt">Alt: --</div>
+    </div>
+
+    <div id="controls">
+        <label class="btn">📂<input type="file" id="fileInput" style="display:none" accept=".gpx"></label>
+        <button class="btn" id="trackBtn">📍</button>
     </div>
 
     <div id="map"></div>
     <div id="elevation-div"></div>
 
-    <div id="controls">
-        <label class="btn" title="Load GPX/KML">
-            📂 <input type="file" id="fileInput" accept=".gpx,.kml">
-        </label>
-        <button class="btn" id="trackBtn" title="Start Tracking">📍</button>
-        <button class="btn" id="wakeBtn" title="Keep Screen On">🔆</button>
-    </div>
-
-    <!-- Scripts -->
+    <!-- Load Scripts in Order -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet-gpx/gpx.js"></script>
+    <script src="https://unpkg.com/d3@7.8.5/dist/d3.min.js"></script>
     <script src="https://unpkg.com/@raruto/leaflet-elevation/dist/leaflet-elevation.js"></script>
 
     <script>
-        let map, controlElevation, userMarker, trackPath = [], isTracking = false;
-        let wakeLock = null;
-
-        // 1. Initialize Map
-        map = L.map('map', { zoomControl: false, attributionControl: false }).setView([0, 0], 2);
+        // 1. Setup Map - Using Standard OpenStreetMap Tiles (No Key Needed)
+        const map = L.map('map').setView([51.505, -0.09], 13);
         
-        // Use Outdoorsy/Cycling Tiles (OpenStreetMap)
-        L.tileLayer('https://{s}.tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey=YOUR_OPTIONAL_KEY', {
-            maxZoom: 18,
-            attribution: '© OpenStreetMap'
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
-        // 2. Initialize Elevation Profile
-        controlElevation = L.control.elevation({
+        // 2. Setup Elevation Chart
+        const el = L.control.elevation({
             container: "#elevation-div",
             theme: "dark-theme",
             detached: true,
-            elevationData: "ele",
-            followMarker: true,
-            zOrder: 1
         }).addTo(map);
 
-        // 3. Handle File Loading (GPX/KML)
+        // 3. File Loader
         document.getElementById('fileInput').onchange = function(e) {
             const file = e.target.files[0];
             const reader = new FileReader();
-            reader.onload = function(event) {
-                const data = event.target.result;
-                
-                // Clear previous
-                controlElevation.clear();
-                
-                // Load to Map and Profile
-                controlElevation.load(data);
-                
-                // Auto-zoom to route
+            reader.onload = function(evt) {
+                el.clear();
+                el.load(evt.target.result);
+                // Wait a moment for data to process then fit bounds
                 setTimeout(() => {
-                    const bounds = controlElevation.getBounds();
+                    const bounds = el.getBounds();
                     if (bounds) map.fitBounds(bounds);
                 }, 500);
             };
             reader.readAsText(file);
         };
 
-        // 4. GPS Tracking Logic
+        // 4. Tracker
+        let watchId = null;
+        const userMarker = L.circleMarker([0,0], {color: 'red'}).addTo(map);
+
         document.getElementById('trackBtn').onclick = function() {
-            isTracking = !isTracking;
-            this.style.background = isTracking ? "#ff5252" : "#00e676";
-            
-            if (isTracking) {
-                navigator.geolocation.watchPosition(updatePosition, handleError, {
-                    enableHighAccuracy: true,
-                    maximumAge: 0,
-                    timeout: 5000
-                });
-            }
-        };
-
-        function updatePosition(position) {
-            const { latitude, longitude, speed, altitude } = position.coords;
-            const latlng = [latitude, longitude];
-
-            if (!userMarker) {
-                userMarker = L.circleMarker(latlng, { color: '#00e676', radius: 8, fillOpacity: 1 }).addTo(map);
+            if (!watchId) {
+                this.style.background = "red";
+                watchId = navigator.geolocation.watchPosition(pos => {
+                    const {latitude, longitude, speed, altitude} = pos.coords;
+                    const latlng = [latitude, longitude];
+                    userMarker.setLatLng(latlng);
+                    map.panTo(latlng);
+                    document.getElementById('speed').innerText = `Speed: ${(speed * 3.6 || 0).toFixed(1)} km/h`;
+                    document.getElementById('alt').innerText = `Alt: ${altitude?.toFixed(0) || '--'}m`;
+                }, err => alert("Check GPS settings"), {enableHighAccuracy: true});
             } else {
-                userMarker.setLatLng(latlng);
-            }
-
-            if (isTracking) {
-                map.panTo(latlng);
-                document.getElementById('speed').innerText = speed ? (speed * 3.6).toFixed(1) : "0.0";
-                document.getElementById('ele').innerText = altitude ? altitude.toFixed(0) + "m" : "--";
-                
-                // Turn-by-turn Logic: Find distance to next point on elevation profile
-                // (Note: leaflet-elevation automatically provides 'distance-to-end' if a route is loaded)
-            }
-        }
-
-        // 5. Wake Lock API (Keep Screen On)
-        document.getElementById('wakeBtn').onclick = async () => {
-            try {
-                if ('wakeLock' in navigator) {
-                    wakeLock = await navigator.wakeLock.request('screen');
-                    alert("Screen Wake Lock Active!");
-                }
-            } catch (err) {
-                console.error(`${err.name}, ${err.message}`);
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+                this.style.background = "#00e676";
             }
         };
-
-        function handleError(err) { console.warn(`ERROR(${err.code}): ${err.message}`); }
-
-        // 6. Fullscreen helper
-        function toggleFullScreen() {
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen();
-            }
-        }
-        map.on('click', toggleFullScreen);
     </script>
 </body>
 </html>
