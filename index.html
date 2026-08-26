@@ -17,37 +17,41 @@
     <style>
         :root { --bg: #111; --card: #1a1a1a; --accent: #00e676; --blue: #2979ff; --error: #ff5252; }
         
-        /* THE FIX: Flexbox Layout to remove gaps */
-        body, html { 
-            margin: 0; padding: 0; 
-            height: 100%; width: 100%; 
-            background: var(--bg); color: white; 
+        /* THE FIX: Remove all gaps and use Dynamic Viewport Height */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        html, body { 
+            height: 100dvh; /* Dynamic height to fill mobile screen perfectly */
+            width: 100vw;
+            background: var(--bg); 
+            color: white; 
             font-family: sans-serif; 
             overflow: hidden;
             display: flex;
-            flex-direction: column; /* Stack map and display area */
+            flex-direction: column;
         }
         
         #map { 
-            flex: 6; /* Takes 60% of available height */
+            flex: 1 1 60%; /* Map takes 60% of available space */
             width: 100%; 
             background: #222; 
         } 
         
         #display-area { 
-            flex: 4; /* Takes 40% of available height */
+            flex: 1 1 40%; /* Data takes remaining 40% */
             width: 100%; 
             background: var(--bg); 
             position: relative; 
             border-top: 1px solid #333;
-            /* Account for Samsung navigation bar at the bottom */
-            padding-bottom: env(safe-area-inset-bottom); 
         }
         
-        /* Ensure the elevation div fills the container perfectly */
         #elevation-div { height: 100%; width: 100%; }
 
-        /* Dashboard Overlay */
+        /* THE FIX: Remove the 'X' and default summary items */
+        .elevation-control .close-button { display: none !important; }
+        .elevation-control .elevation-summary { display: none !important; }
+
+        /* Dashboard Overlay (Top Left) */
         #live-dashboard {
             position: absolute; top: env(safe-area-inset-top, 10px); left: 10px; z-index: 1000;
             display: flex; flex-direction: column; gap: 5px; pointer-events: none;
@@ -61,31 +65,27 @@
         /* Text View Layout */
         #text-summary-view { 
             height: 100%; width: 100%; display: none;
-            grid-template-columns: 1fr 1fr; gap: 8px; padding: 15px; box-sizing: border-box;
+            grid-template-columns: 1fr 1fr; gap: 8px; padding: 15px; 
         }
         .summary-card { background: var(--card); padding: 10px; border-radius: 10px; text-align: center; display: flex; flex-direction: column; justify-content: center; border-bottom: 2px solid #333; }
         .summary-label { font-size: 0.65rem; color: #888; text-transform: uppercase; }
         .summary-value { font-size: 1.2rem; font-weight: bold; color: var(--accent); }
 
-        /* Controls */
+        /* Controls - Smaller & Better Placed */
         #controls {
-            position: absolute; bottom: 15px; right: 10px; z-index: 1000;
-            display: flex; flex-direction: column; gap: 10px;
+            position: absolute; bottom: 10px; right: 10px; z-index: 1000;
+            display: flex; flex-direction: column; gap: 8px;
         }
         .btn {
-            width: 44px; height: 44px; border-radius: 50%; border: none;
+            width: 40px; height: 40px; border-radius: 50%; border: none;
             display: flex; align-items: center; justify-content: center;
-            font-size: 1.3rem; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            font-size: 1.2rem; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
             background: #333; color: white;
         }
         #toggleViewBtn { background: var(--blue); }
         #locateBtn { background: white; color: black; }
         #startBtn { background: var(--accent); color: black; }
         #stopBtn { background: var(--error); display: none; }
-
-        /* Remove default plugin UI elements */
-        .elevation-control .close-button { display: none !important; }
-        .elevation-summary { display: none !important; }
     </style>
 </head>
 <body>
@@ -124,8 +124,7 @@
         let map, elControl, userMarker, watchId, polyline, recordedPoints = [];
         let isRecording = false, followMode = true, currentLatlng = null, totalDist = 0;
 
-        // Initialize Map
-        map = L.map('map', { zoomControl: false, attributionControl: false }).setView([52.6, -1.6], 13);
+        map = L.map('map', { zoomControl: false, attributionControl: false }).setView([51.5, -0.1], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         elControl = L.control.elevation({
@@ -137,7 +136,7 @@
             maintainAspectRatio: false
         }).addTo(map);
 
-        // Toggle Graph vs Text
+        // View Toggling
         let graphVisible = true;
         document.getElementById('toggleViewBtn').onclick = () => {
             graphVisible = !graphVisible;
@@ -146,7 +145,6 @@
             document.getElementById('toggleViewBtn').innerText = graphVisible ? '📊' : '📝';
         };
 
-        // GPS Logic
         function initGPS() {
             watchId = navigator.geolocation.watchPosition(pos => {
                 const { latitude, longitude, altitude, speed } = pos.coords;
@@ -156,7 +154,7 @@
 
                 if (!userMarker) {
                     userMarker = L.circleMarker(now, {radius: 8, color: 'white', fillColor: '#2979ff', fillOpacity: 1, weight: 2}).addTo(map);
-                    map.setView(now, 16);
+                    map.setView(now, 17);
                 } else { userMarker.setLatLng(now); }
 
                 if (followMode) map.panTo(now);
@@ -174,7 +172,7 @@
             }, null, { enableHighAccuracy: true });
         }
 
-        // Auto-Center logic
+        // Center Location
         document.getElementById('locateBtn').onclick = () => {
             followMode = true;
             document.getElementById('locateBtn').style.background = "var(--blue)";
@@ -187,7 +185,7 @@
             document.getElementById('locateBtn').style.color = "black";
         });
 
-        // Record Buttons
+        // Recording
         document.getElementById('startBtn').onclick = () => {
             isRecording = true; recordedPoints = []; totalDist = 0;
             if(polyline) map.removeLayer(polyline);
@@ -197,7 +195,7 @@
         };
 
         document.getElementById('stopBtn').onclick = () => {
-            if(confirm("Stop ride and save?")) {
+            if(confirm("Stop and save ride?")) {
                 isRecording = false;
                 document.getElementById('startBtn').style.display = 'flex';
                 document.getElementById('stopBtn').style.display = 'none';
@@ -205,7 +203,7 @@
             }
         };
 
-        // File Loading
+        // File Loader
         document.getElementById('fileInput').onchange = (e) => {
             const reader = new FileReader();
             reader.onload = (evt) => {
