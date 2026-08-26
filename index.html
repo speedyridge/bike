@@ -3,114 +3,105 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>BikeNav</title>
+    <title>BikeNav Pro</title>
     
     <!-- PWA Settings -->
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#111111">
-    <link rel="manifest" href="data:application/manifest+json;base64,ewogICJkZXNjcmlwdGlvbiI6ICJCaWtlIE5hdmlnYXRpb24iLAogICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICJpY29ucyI6IFsgeyAic3JjIjogImh0dHBzOi8vY2RuLWljb25zLXBuZy5mbGF0aWNvbi5jb20vNTEyLzI5NzYvMjk3NjA2OC5wbmciLCAic2l6ZXMiOiAiNTEyeDUxMiIsICJ0eXBlIjogImltYWdlL3BuZyIgfSBdLAogICJuYW1lIjogIkJpa2VOYXYiLAogICJzaG9ydF9uYW1lIjogIkJpa2VOYXYiLAogICJzdGFydF91cmwiOiAiLiIKfQ==">
+    <meta name="theme-color" content="#000000">
+    <link rel="manifest" href="data:application/manifest+json;base64,ewogICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICJuYW1lIjogIkJpa2VOYXYiLAogICJzaG9ydF9uYW1lIjogIkJpa2VOYXYiLAogICJzdGFydF91cmwiOiAiLiIKfQ==">
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/@raruto/leaflet-elevation/dist/leaflet-elevation.css" />
 
     <style>
-        :root { --bg: #111; --card: #1a1a1a; --accent: #00e676; --blue: #2979ff; --error: #ff5252; }
+        :root { --bg: #000; --card: #161616; --accent: #00e676; --blue: #2979ff; --error: #ff5252; }
         
-        /* 1. RESET EVERYTHING */
-        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        /* 1. NUCLEAR RESET: Kill every possible margin/gap */
+        * { box-sizing: border-box; margin: 0 !important; padding: 0 !important; }
         
         html, body { 
-            height: 100dvh; 
+            height: 100dvh; /* Dynamic Viewport Height */
             width: 100vw;
-            background: var(--bg); 
-            color: white; 
-            font-family: sans-serif; 
+            background: #000; 
             overflow: hidden;
-            display: flex;
-            flex-direction: column;
+            display: grid;
+            grid-template-rows: 62% 38%; /* Strict grid to prevent gaps */
         }
         
-        /* 2. LAYOUT SPLIT */
         #map { 
-            flex: 1 1 60%;
             width: 100%; 
-            background: #222; 
+            height: 100%;
+            background: #111;
+            z-index: 1;
         } 
         
         #display-area { 
-            flex: 1 1 40%;
             width: 100%; 
-            background: var(--bg); 
+            height: 100%;
+            background: #000; 
             position: relative; 
-            border-top: 1px solid #333;
-            overflow: hidden;
+            border-top: 1px solid #222;
+            z-index: 2;
         }
-        
-        #elevation-div { height: 100%; width: 100%; }
 
-        /* 3. HIDE 'X' AND PLUGIN EXTRAS */
-        /* Broad selector to catch the close button regardless of version */
+        #elevation-div { height: 100%; width: 100%; background: #000; }
+
+        /* 2. THE 'X' BUTTON DELETE: Target every known class name */
         .elevation-control .close-button, 
         .elevation-control-close,
-        .elevation-control .elevation-summary,
-        .elevation-control a.close-button { 
+        .elevation-toggle,
+        .leaflet-control-elevation .close-button { 
             display: none !important; 
-            visibility: hidden !important;
-            opacity: 0 !important;
-            pointer-events: none !important;
+            visibility: hidden !important; 
         }
 
-        /* 4. DASHBOARD (Top Left) */
+        /* 3. FLOATING DASHBOARD (Top Left) */
         #live-dashboard {
-            position: fixed; 
-            top: env(safe-area-inset-top, 10px); 
-            left: 10px; 
-            z-index: 2000;
-            display: flex; flex-direction: column; gap: 5px; pointer-events: none;
+            position: fixed; top: 10px; left: 10px; z-index: 3000;
+            display: flex; flex-direction: column; gap: 6px; pointer-events: none;
         }
         .live-card { 
-            background: rgba(0,0,0,0.85); padding: 6px 12px; border-radius: 8px; 
-            border-left: 4px solid var(--accent); font-size: 0.9rem;
+            background: rgba(0,0,0,0.8); padding: 8px 12px !important; border-radius: 8px; 
+            border-left: 4px solid var(--accent); font-family: sans-serif;
         }
         .live-val { font-weight: bold; color: var(--accent); font-size: 1.1rem; }
 
-        /* 5. CONTROLS (Floating Right) */
+        /* 4. CONTROLS (Right Side - SHIFTED UP) */
         #controls {
             position: fixed; 
-            top: 50%; /* Center vertically on the screen */
-            transform: translateY(-50%);
+            top: 20%; /* Moved much higher up the screen */
             right: 12px; 
-            z-index: 2000;
-            display: flex; flex-direction: column; gap: 10px;
+            z-index: 4000;
+            display: flex; flex-direction: column; gap: 12px;
         }
         .btn {
-            width: 44px; height: 44px; border-radius: 50%; border: none;
+            width: 42px; height: 42px; border-radius: 50%; border: none;
             display: flex; align-items: center; justify-content: center;
-            font-size: 1.3rem; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-            background: #333; color: white;
+            font-size: 1.2rem; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.6);
+            background: #222; color: white;
         }
         #toggleViewBtn { background: var(--blue); }
-        #locateBtn { background: white; color: black; }
-        #startBtn { background: var(--accent); color: black; }
-        #stopBtn { background: var(--error); display: none; }
+        #locateBtn { background: #fff; color: #000; }
+        #startBtn { background: var(--accent); color: #000; }
+        #stopBtn { background: var(--error); color: #fff; display: none; }
 
-        /* 6. TEXT VIEW */
+        /* 5. TEXT VIEW */
         #text-summary-view { 
             height: 100%; width: 100%; display: none;
-            grid-template-columns: 1fr 1fr; gap: 8px; padding: 15px;
-            padding-bottom: env(safe-area-inset-bottom);
+            grid-template-columns: 1fr 1fr; gap: 8px; padding: 15px !important;
+            background: #000;
         }
-        .summary-card { background: var(--card); padding: 10px; border-radius: 10px; text-align: center; display: flex; flex-direction: column; justify-content: center; border-bottom: 2px solid #333; }
-        .summary-label { font-size: 0.65rem; color: #888; text-transform: uppercase; }
-        .summary-value { font-size: 1.2rem; font-weight: bold; color: var(--accent); }
+        .summary-card { background: var(--card); border-radius: 10px; text-align: center; display: flex; flex-direction: column; justify-content: center; border-bottom: 2px solid #333; }
+        .summary-label { font-size: 0.65rem; color: #888; text-transform: uppercase; font-family: sans-serif; }
+        .summary-value { font-size: 1.2rem; font-weight: bold; color: var(--accent); font-family: sans-serif; }
     </style>
 </head>
 <body>
 
     <div id="live-dashboard">
-        <div class="live-card"><span id="speed" class="live-val">0.0</span> km/h</div>
-        <div class="live-card"><span id="live-dist" class="live-val">0.00</span> km recorded</div>
+        <div class="live-card" style="color:white;"><span id="speed" class="live-val">0.0</span> km/h</div>
+        <div class="live-card" style="color:white;"><span id="live-dist" class="live-val">0.00</span> km</div>
     </div>
 
     <div id="controls">
@@ -142,9 +133,11 @@
         let map, elControl, userMarker, watchId, polyline, recordedPoints = [];
         let isRecording = false, followMode = true, currentLatlng = null, totalDist = 0;
 
-        map = L.map('map', { zoomControl: false, attributionControl: false }).setView([52.6, -1.6], 13);
+        // 1. Initialize Map
+        map = L.map('map', { zoomControl: false, attributionControl: false }).setView([51.5, -0.1], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
+        // 2. Initialize Elevation (No Summary, Clean)
         elControl = L.control.elevation({
             container: "#elevation-div",
             theme: "dark-theme",
@@ -154,7 +147,14 @@
             maintainAspectRatio: false
         }).addTo(map);
 
-        // Toggle Views
+        // 3. THE 'X' BUTTON JANITOR (Deletes the button as soon as it's created)
+        const observer = new MutationObserver(() => {
+            const xButton = document.querySelector('.close-button') || document.querySelector('.elevation-control-close');
+            if (xButton) xButton.remove();
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+
+        // View Toggling
         let graphVisible = true;
         document.getElementById('toggleViewBtn').onclick = () => {
             graphVisible = !graphVisible;
@@ -167,7 +167,6 @@
             watchId = navigator.geolocation.watchPosition(pos => {
                 const { latitude, longitude, altitude, speed } = pos.coords;
                 const now = [latitude, longitude];
-                
                 document.getElementById('speed').innerText = (speed * 3.6 || 0).toFixed(1);
 
                 if (!userMarker) {
@@ -196,7 +195,7 @@
             document.getElementById('locateBtn').style.color = "white";
             if (currentLatlng) map.flyTo(currentLatlng, 17);
         };
-
+        
         map.on('dragstart', () => {
             followMode = false;
             document.getElementById('locateBtn').style.background = "white";
@@ -212,7 +211,7 @@
         };
 
         document.getElementById('stopBtn').onclick = () => {
-            if(confirm("Stop and save?")) {
+            if(confirm("Save ride?")) {
                 isRecording = false;
                 document.getElementById('startBtn').style.display = 'flex';
                 document.getElementById('stopBtn').style.display = 'none';
@@ -231,7 +230,6 @@
                     document.getElementById('txt-ascent').innerText = Math.round(s.elevation_gain) + " m";
                     document.getElementById('txt-max').innerText = Math.round(s.elevation_max) + " m";
                     document.getElementById('txt-avg').innerText = Math.round(s.elevation_avg) + " m";
-                    document.getElementById('live-dist').innerText = s.distance.toFixed(2);
                 });
                 setTimeout(() => map.fitBounds(elControl.getBounds()), 500);
             };
@@ -239,7 +237,7 @@
         };
 
         function saveGPX() {
-            let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="BikeNav"><trk><trkseg>`;
+            let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1"><trk><trkseg>`;
             recordedPoints.forEach(p => { gpx += `\n<trkpt lat="${p.lat}" lon="${p.lon}"><ele>${p.ele}</ele><time>${p.time}</time></trkpt>`; });
             gpx += `\n</trkseg></trk></gpx>`;
             const blob = new Blob([gpx], { type: 'application/gpx+xml' });
