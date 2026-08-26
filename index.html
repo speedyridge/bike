@@ -12,31 +12,49 @@
         :root { --bg: #121212; --accent: #00e676; --error: #ff5252; --blue: #2979ff; }
         body, html { margin: 0; padding: 0; height: 100%; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; }
         
-        #map { height: 65vh; width: 100%; background: #222; } 
-        #elevation-div { height: 35vh; width: 100%; background: #1a1a1a; }
+        #map { height: 60vh; width: 100%; background: #222; } 
+        #elevation-div { height: 40vh; width: 100%; background: #1a1a1a; position: relative; }
         
-        /* Stats Dashboard */
+        /* Large Text Stats Overlay */
         #stats {
             position: absolute; top: env(safe-area-inset-top, 10px); left: 10px; z-index: 1000;
             display: flex; gap: 8px; pointer-events: none;
         }
         .stat-card { background: rgba(0,0,0,0.85); padding: 8px 12px; border-radius: 12px; border-bottom: 3px solid var(--accent); min-width: 70px; }
         .val { font-size: 1.2rem; font-weight: bold; display: block; color: var(--accent); }
-        .lbl { font-size: 0.6rem; text-transform: uppercase; opacity: 0.7; letter-spacing: 1px; }
+        .lbl { font-size: 0.6rem; text-transform: uppercase; opacity: 0.7; }
 
-        /* Floating Buttons */
+        /* Elevation Summary Text Formatting */
+        .elevation-summary { 
+            font-size: 14px !important; 
+            color: #ccc !important; 
+            background: none !important;
+            padding: 10px !important;
+            text-align: center;
+        }
+        .elevation-summary .summaryvalue { 
+            font-weight: bold; 
+            color: var(--accent); 
+            font-size: 16px;
+        }
+        .elevation-summary .summarylabel { 
+            margin-right: 5px; 
+            color: #999;
+        }
+
+        /* Tooltip styling (when clicking graph) */
+        .elevation-control .background { fill: rgba(30, 30, 30, 0.8); }
+        .elevation-control .point { fill: var(--accent); stroke: #fff; }
+        
         #controls {
-            position: absolute; bottom: 37vh; right: 12px; z-index: 1000;
+            position: absolute; bottom: 42vh; right: 12px; z-index: 1000;
             display: flex; flex-direction: column; gap: 12px;
         }
         .btn {
             width: 58px; height: 58px; border-radius: 50%; border: none;
             display: flex; align-items: center; justify-content: center;
             font-size: 1.5rem; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.6);
-            transition: transform 0.1s;
         }
-        .btn:active { transform: scale(0.9); }
-        
         #locateBtn { background: white; color: black; } 
         #startBtn { background: var(--accent); color: black; }
         #stopBtn { background: var(--error); color: white; display: none; }
@@ -60,10 +78,10 @@
     <div id="recDot" class="rec-dot"></div>
 
     <div id="controls">
-        <label class="btn" id="fileBtn" title="Load GPX">📂<input type="file" id="fileInput" style="display:none" accept=".gpx"></label>
-        <button class="btn" id="locateBtn" title="Find Me">🎯</button>
-        <button class="btn" id="startBtn" title="Start Ride">▶️</button>
-        <button class="btn" id="stopBtn" title="Stop Ride">⏹️</button>
+        <label class="btn" id="fileBtn">📂<input type="file" id="fileInput" style="display:none" accept=".gpx"></label>
+        <button class="btn" id="locateBtn">🎯</button>
+        <button class="btn" id="startBtn">▶️</button>
+        <button class="btn" id="stopBtn">⏹️</button>
     </div>
 
     <div id="map"></div>
@@ -85,104 +103,83 @@
         map = L.map('map', { zoomControl: false, attributionControl: false }).setView([0,0], 2);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
+        // 2. Initialize Elevation Profile with CUSTOM TEXT FORMATTING
         elControl = L.control.elevation({
             container: "#elevation-div",
             theme: "dark-theme",
             detached: true,
-            elevationData: "ele"
+            elevationData: "ele",
+            summary: 'multiline', // Shows nice text labels at bottom
+            hoverNumber: {
+                decimalsX: 1, // Distance to 1 decimal point (e.g. 1.2 km)
+                decimalsY: 0, // Altitude to whole numbers (e.g. 150 m)
+                formatter: undefined 
+            },
+            // Custom labels for the summary
+            imperial: false,
+            acceleration: false,
+            slope: false,
+            speed: false,
         }).addTo(map);
 
-        // 2. Start GPS Tracking
+        // 3. GPS Logic
         function initGPS() {
             watchId = navigator.geolocation.watchPosition(pos => {
                 const { latitude, longitude, altitude, speed } = pos.coords;
                 const now = [latitude, longitude];
                 lastLatlng = now;
-
                 document.getElementById('speed').innerText = (speed * 3.6 || 0).toFixed(1);
                 
                 if (!userMarker) {
                     userMarker = L.circleMarker(now, {radius: 9, color: 'white', fillColor: '#2979ff', fillOpacity: 1, weight: 3}).addTo(map);
                     map.setView(now, 16);
-                } else {
-                    userMarker.setLatLng(now);
-                }
+                } else { userMarker.setLatLng(now); }
 
                 if (isRecording) {
                     if(recordedPoints.length > 0) {
                         const prev = recordedPoints[recordedPoints.length - 1];
-                        const d = map.distance([prev.lat, prev.lon], now);
-                        totalDist += (d / 1000);
+                        totalDist += (map.distance([prev.lat, prev.lon], now) / 1000);
                         document.getElementById('dist').innerText = totalDist.toFixed(2);
                     }
                     recordedPoints.push({ lat: latitude, lon: longitude, ele: altitude || 0, time: new Date().toISOString() });
                     polyline.addLatLng(now);
                 }
-            }, err => console.log("Waiting for GPS..."), { enableHighAccuracy: true });
+            }, null, { enableHighAccuracy: true });
         }
 
-        // 3. Buttons
-        document.getElementById('locateBtn').onclick = () => {
-            if (lastLatlng) map.flyTo(lastLatlng, 16);
-        };
+        // Buttons
+        document.getElementById('locateBtn').onclick = () => { if (lastLatlng) map.flyTo(lastLatlng, 16); };
 
         document.getElementById('startBtn').onclick = () => {
             isRecording = true;
             recordedPoints = [];
             totalDist = 0;
             document.getElementById('dist').innerText = "0.00";
-            
             if(polyline) map.removeLayer(polyline);
             polyline = L.polyline([], {color: '#00e676', weight: 6}).addTo(map);
-            
             document.getElementById('startBtn').style.display = 'none';
             document.getElementById('stopBtn').style.display = 'flex';
             document.getElementById('recDot').style.display = 'block';
         };
 
-        // STOP LOGIC WITH CONFIRMATION
         document.getElementById('stopBtn').onclick = () => {
-            // First, ask if they want to stop
-            const stopConfirm = confirm("Do you want to stop recording this ride?");
-            
-            if (stopConfirm) {
+            if (confirm("Stop recording?")) {
                 isRecording = false;
                 document.getElementById('startBtn').style.display = 'flex';
                 document.getElementById('stopBtn').style.display = 'none';
                 document.getElementById('recDot').style.display = 'none';
-
-                if(recordedPoints.length > 5) {
-                    // Second, ask if they want to save the file
-                    const saveConfirm = confirm("Ride finished! Would you like to save the GPX file to your phone?");
-                    if (saveConfirm) {
-                        downloadGPX(recordedPoints);
-                    } else {
-                        const discard = confirm("Discard this ride data permanently?");
-                        if (discard) {
-                            if(polyline) map.removeLayer(polyline);
-                            document.getElementById('dist').innerText = "0.00";
-                            recordedPoints = [];
-                        }
-                    }
-                } else {
-                    alert("Ride was too short to save.");
-                    if(polyline) map.removeLayer(polyline);
-                }
+                if(recordedPoints.length > 5 && confirm("Save GPX?")) downloadGPX(recordedPoints);
             }
         };
 
         function downloadGPX(points) {
             let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="BikeNav"><trk><trkseg>`;
-            points.forEach(p => {
-                gpx += `\n<trkpt lat="${p.lat}" lon="${p.lon}"><ele>${p.ele}</ele><time>${p.time}</time></trkpt>`;
-            });
+            points.forEach(p => { gpx += `\n<trkpt lat="${p.lat}" lon="${p.lon}"><ele>${p.ele}</ele><time>${p.time}</time></trkpt>`; });
             gpx += `\n</trkseg></trk></gpx>`;
-
             const blob = new Blob([gpx], { type: 'application/gpx+xml' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
-            a.download = `ride_${new Date().toISOString().slice(0,10)}.gpx`;
+            a.href = url; a.download = `ride_${new Date().toISOString().slice(0,10)}.gpx`;
             a.click();
         }
 
