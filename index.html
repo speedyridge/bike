@@ -9,81 +9,75 @@
     <link rel="stylesheet" href="https://unpkg.com/@raruto/leaflet-elevation/dist/leaflet-elevation.css" />
 
     <style>
-        :root { --bg: #121212; --accent: #00e676; --error: #ff5252; --blue: #2979ff; }
-        body, html { margin: 0; padding: 0; height: 100%; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; }
+        :root { --bg: #111; --card: #1a1a1a; --accent: #00e676; --blue: #2979ff; }
+        body, html { margin: 0; padding: 0; height: 100%; background: var(--bg); color: white; font-family: -apple-system, sans-serif; overflow: hidden; }
         
-        #map { height: 60vh; width: 100%; background: #222; } 
-        #elevation-div { height: 40vh; width: 100%; background: #111; overflow-y: auto; }
+        #map { height: 55vh; width: 100%; background: #222; } 
+        #elevation-div { height: 45vh; width: 100%; background: var(--bg); overflow-y: auto; }
         
-        /* --- THE FIX: FORMATTING THE SUMMARY TEXT --- */
+        /* --- DASHBOARD FORMATTING FIX --- */
         .elevation-summary { 
-            display: grid !important;
-            grid-template-columns: 1fr 1fr !important; /* Two columns */
-            gap: 15px !important;
-            padding: 20px !important;
-            background: #111 !important;
+            display: flex !important;
+            flex-wrap: wrap !important;
+            padding: 15px !important;
+            background: var(--bg) !important;
             border: none !important;
         }
 
-        /* Hide the annoying dashes between items */
-        .elevation-summary .summarydivider { display: none !important; }
-
-        /* Style each data block (Length, Time, etc) */
+        /* Force each stat (Length, Time, etc.) to be its own block */
         .elevation-summary > span {
             display: flex !important;
             flex-direction: column !important;
-            align-items: center !important;
-            justify-content: center !important;
-            background: #1a1a1a;
-            padding: 10px;
-            border-radius: 8px;
-            border-bottom: 2px solid #333;
+            width: 45% !important; /* Forces 2 columns */
+            margin: 2% !important;
+            padding: 12px !important;
+            background: var(--card) !important;
+            border-radius: 10px !important;
+            border-bottom: 3px solid #333 !important;
+            text-align: center !important;
         }
 
-        /* Labels (e.g., "Total Length") */
+        /* Hide those dashes between the text */
+        .elevation-summary .summarydivider { display: none !important; }
+
+        /* Style the Label (e.g. "Total Length") */
         .elevation-summary .summarylabel { 
-            font-size: 0.65rem !important; 
-            text-transform: uppercase !important; 
+            font-size: 0.7rem !important; 
             color: #888 !important; 
-            margin-bottom: 4px !important;
-            display: block !important;
+            text-transform: uppercase !important; 
+            margin-bottom: 5px !important;
+            order: 1; /* Label on top */
         }
 
-        /* Values (e.g., "12.5 km") */
+        /* Style the Value (e.g. "12.50 km") */
         .elevation-summary .summaryvalue { 
-            font-size: 1.3rem !important; 
+            font-size: 1.2rem !important; 
             font-weight: bold !important; 
             color: var(--accent) !important;
-            display: block !important;
+            order: 2; /* Number below label */
         }
+        /* ---------------------------------- */
 
-        /* Make the first two (Length/Time) span full width if you want, 
-           or leave as a grid for symmetry */
-        /* .elevation-summary > span:first-child { grid-column: span 2; } */
-
-        /* ------------------------------------------- */
-
-        /* Stats Overlay */
         #stats {
             position: absolute; top: env(safe-area-inset-top, 10px); left: 10px; z-index: 1000;
             display: flex; gap: 8px; pointer-events: none;
         }
-        .stat-card { background: rgba(0,0,0,0.85); padding: 8px 12px; border-radius: 12px; border-bottom: 3px solid var(--accent); min-width: 70px; }
-        .val { font-size: 1.2rem; font-weight: bold; display: block; color: var(--accent); }
-        .lbl { font-size: 0.6rem; text-transform: uppercase; opacity: 0.7; }
+        .stat-card { background: rgba(0,0,0,0.8); padding: 8px 12px; border-radius: 12px; border-bottom: 3px solid var(--accent); min-width: 60px; text-align: center; }
+        .val { font-size: 1.2rem; font-weight: bold; color: var(--accent); }
+        .lbl { font-size: 0.6rem; text-transform: uppercase; opacity: 0.6; display: block; }
 
         #controls {
-            position: absolute; bottom: 42vh; right: 12px; z-index: 1000;
+            position: absolute; bottom: 47vh; right: 12px; z-index: 1000;
             display: flex; flex-direction: column; gap: 12px;
         }
         .btn {
-            width: 58px; height: 58px; border-radius: 50%; border: none;
+            width: 55px; height: 55px; border-radius: 50%; border: none;
             display: flex; align-items: center; justify-content: center;
-            font-size: 1.5rem; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+            font-size: 1.5rem; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
         #locateBtn { background: white; color: black; } 
         #startBtn { background: var(--accent); color: black; }
-        #stopBtn { background: var(--error); color: white; display: none; }
+        #stopBtn { background: #ff5252; color: white; display: none; }
         #fileBtn { background: #333; color: white; }
     </style>
 </head>
@@ -91,7 +85,7 @@
 
     <div id="stats">
         <div class="stat-card"><span id="speed" class="val">0.0</span><span class="lbl">km/h</span></div>
-        <div class="stat-card"><span id="dist" class="val">0.00</span><span class="lbl">km</span></div>
+        <div class="stat-card"><span id="dist" class="val">0.00</span><span class="lbl">km recorded</span></div>
     </div>
 
     <div id="controls">
@@ -115,39 +109,41 @@
         map = L.map('map', { zoomControl: false, attributionControl: false }).setView([0,0], 2);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
+        // Elevation setup
         elControl = L.control.elevation({
             container: "#elevation-div",
             theme: "dark-theme",
             detached: true,
-            summary: 'multiline', // This is what creates the text boxes
-            elevationData: "ele",
-            time: true,
-            distance: true,
+            summary: 'multiline', // Vital for the CSS grid to work
+            elevationData: "ele"
         }).addTo(map);
 
+        // GPS Logic
         function initGPS() {
             watchId = navigator.geolocation.watchPosition(pos => {
                 const { latitude, longitude, altitude, speed } = pos.coords;
-                const now = [latitude, longitude];
-                lastLatlng = now;
+                lastLatlng = [latitude, longitude];
                 document.getElementById('speed').innerText = (speed * 3.6 || 0).toFixed(1);
+                
                 if (!userMarker) {
-                    userMarker = L.circleMarker(now, {radius: 9, color: 'white', fillColor: '#2979ff', fillOpacity: 1, weight: 3}).addTo(map);
-                    map.setView(now, 16);
-                } else { userMarker.setLatLng(now); }
+                    userMarker = L.circleMarker(lastLatlng, {radius: 9, color: 'white', fillColor: '#2979ff', fillOpacity: 1, weight: 3}).addTo(map);
+                    map.setView(lastLatlng, 16);
+                } else { userMarker.setLatLng(lastLatlng); }
+
                 if (isRecording) {
                     if(recordedPoints.length > 0) {
                         const prev = recordedPoints[recordedPoints.length - 1];
-                        totalDist += (map.distance([prev.lat, prev.lon], now) / 1000);
+                        totalDist += (map.distance([prev.lat, prev.lon], lastLatlng) / 1000);
                         document.getElementById('dist').innerText = totalDist.toFixed(2);
                     }
                     recordedPoints.push({ lat: latitude, lon: longitude, ele: altitude || 0, time: new Date().toISOString() });
-                    polyline.addLatLng(now);
+                    polyline.addLatLng(lastLatlng);
                 }
             }, null, { enableHighAccuracy: true });
         }
 
         document.getElementById('locateBtn').onclick = () => { if (lastLatlng) map.flyTo(lastLatlng, 16); };
+        
         document.getElementById('startBtn').onclick = () => {
             isRecording = true; recordedPoints = []; totalDist = 0;
             if(polyline) map.removeLayer(polyline);
@@ -155,6 +151,7 @@
             document.getElementById('startBtn').style.display = 'none';
             document.getElementById('stopBtn').style.display = 'flex';
         };
+
         document.getElementById('stopBtn').onclick = () => {
             if (confirm("Stop recording?")) {
                 isRecording = false;
@@ -171,7 +168,7 @@
             const blob = new Blob([gpx], { type: 'application/gpx+xml' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = `ride_${new Date().toISOString().slice(0,10)}.gpx`;
+            a.href = url; a.download = `ride_${Date.now()}.gpx`;
             a.click();
         }
 
