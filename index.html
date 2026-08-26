@@ -37,12 +37,11 @@
         }
         .btn:active { transform: scale(0.9); }
         
-        #locateBtn { background: white; color: black; } /* The button you wanted back */
+        #locateBtn { background: white; color: black; } 
         #startBtn { background: var(--accent); color: black; }
         #stopBtn { background: var(--error); color: white; display: none; }
         #fileBtn { background: #333; color: white; }
 
-        /* Recording Pulse */
         .rec-dot {
             position: absolute; top: 20px; right: 20px; width: 12px; height: 12px;
             background: red; border-radius: 50%; display: none; z-index: 1001;
@@ -64,13 +63,12 @@
         <label class="btn" id="fileBtn" title="Load GPX">📂<input type="file" id="fileInput" style="display:none" accept=".gpx"></label>
         <button class="btn" id="locateBtn" title="Find Me">🎯</button>
         <button class="btn" id="startBtn" title="Start Ride">▶️</button>
-        <button class="btn" id="stopBtn" title="Stop & Save">⏹️</button>
+        <button class="btn" id="stopBtn" title="Stop Ride">⏹️</button>
     </div>
 
     <div id="map"></div>
     <div id="elevation-div"></div>
 
-    <!-- Scripts -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet-gpx/gpx.js"></script>
     <script src="https://unpkg.com/d3@7.8.5/dist/d3.min.js"></script>
@@ -94,17 +92,15 @@
             elevationData: "ele"
         }).addTo(map);
 
-        // 2. Start GPS Background Watching
+        // 2. Start GPS Tracking
         function initGPS() {
             watchId = navigator.geolocation.watchPosition(pos => {
                 const { latitude, longitude, altitude, speed } = pos.coords;
                 const now = [latitude, longitude];
                 lastLatlng = now;
 
-                // Update Speed Stats
                 document.getElementById('speed').innerText = (speed * 3.6 || 0).toFixed(1);
                 
-                // Update User Marker
                 if (!userMarker) {
                     userMarker = L.circleMarker(now, {radius: 9, color: 'white', fillColor: '#2979ff', fillOpacity: 1, weight: 3}).addTo(map);
                     map.setView(now, 16);
@@ -112,7 +108,6 @@
                     userMarker.setLatLng(now);
                 }
 
-                // If recording, draw the line and save data
                 if (isRecording) {
                     if(recordedPoints.length > 0) {
                         const prev = recordedPoints[recordedPoints.length - 1];
@@ -123,21 +118,14 @@
                     recordedPoints.push({ lat: latitude, lon: longitude, ele: altitude || 0, time: new Date().toISOString() });
                     polyline.addLatLng(now);
                 }
-            }, err => console.log("GPS Wait..."), { enableHighAccuracy: true });
+            }, err => console.log("Waiting for GPS..."), { enableHighAccuracy: true });
         }
 
-        // 3. Button Actions
-        
-        // FIND LOCATION (The button you wanted back)
+        // 3. Buttons
         document.getElementById('locateBtn').onclick = () => {
-            if (lastLatlng) {
-                map.flyTo(lastLatlng, 16);
-            } else {
-                alert("Waiting for GPS signal...");
-            }
+            if (lastLatlng) map.flyTo(lastLatlng, 16);
         };
 
-        // START RIDE
         document.getElementById('startBtn').onclick = () => {
             isRecording = true;
             recordedPoints = [];
@@ -145,30 +133,46 @@
             document.getElementById('dist').innerText = "0.00";
             
             if(polyline) map.removeLayer(polyline);
-            polyline = L.polyline([], {color: '#00e676', weight: 6, opacity: 0.9}).addTo(map);
+            polyline = L.polyline([], {color: '#00e676', weight: 6}).addTo(map);
             
             document.getElementById('startBtn').style.display = 'none';
             document.getElementById('stopBtn').style.display = 'flex';
             document.getElementById('recDot').style.display = 'block';
         };
 
-        // STOP RIDE
+        // STOP LOGIC WITH CONFIRMATION
         document.getElementById('stopBtn').onclick = () => {
-            isRecording = false;
-            document.getElementById('startBtn').style.display = 'flex';
-            document.getElementById('stopBtn').style.display = 'none';
-            document.getElementById('recDot').style.display = 'none';
+            // First, ask if they want to stop
+            const stopConfirm = confirm("Do you want to stop recording this ride?");
+            
+            if (stopConfirm) {
+                isRecording = false;
+                document.getElementById('startBtn').style.display = 'flex';
+                document.getElementById('stopBtn').style.display = 'none';
+                document.getElementById('recDot').style.display = 'none';
 
-            if(recordedPoints.length > 5) {
-                downloadGPX(recordedPoints);
-            } else {
-                alert("Ride too short to save!");
+                if(recordedPoints.length > 5) {
+                    // Second, ask if they want to save the file
+                    const saveConfirm = confirm("Ride finished! Would you like to save the GPX file to your phone?");
+                    if (saveConfirm) {
+                        downloadGPX(recordedPoints);
+                    } else {
+                        const discard = confirm("Discard this ride data permanently?");
+                        if (discard) {
+                            if(polyline) map.removeLayer(polyline);
+                            document.getElementById('dist').innerText = "0.00";
+                            recordedPoints = [];
+                        }
+                    }
+                } else {
+                    alert("Ride was too short to save.");
+                    if(polyline) map.removeLayer(polyline);
+                }
             }
         };
 
-        // 4. Helper: Download GPX
         function downloadGPX(points) {
-            let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="BikeNav"><trk><name>Ride ${new Date().toLocaleDateString()}</name><trkseg>`;
+            let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="BikeNav"><trk><trkseg>`;
             points.forEach(p => {
                 gpx += `\n<trkpt lat="${p.lat}" lon="${p.lon}"><ele>${p.ele}</ele><time>${p.time}</time></trkpt>`;
             });
@@ -178,11 +182,10 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `bike_ride_${Math.floor(Date.now()/1000)}.gpx`;
+            a.download = `ride_${new Date().toISOString().slice(0,10)}.gpx`;
             a.click();
         }
 
-        // 5. Load File
         document.getElementById('fileInput').onchange = (e) => {
             const reader = new FileReader();
             reader.onload = (evt) => {
@@ -193,7 +196,6 @@
             reader.readAsText(e.target.files[0]);
         };
 
-        // Startup
         initGPS();
     </script>
 </body>
