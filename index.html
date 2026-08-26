@@ -8,101 +8,53 @@
     <link rel="manifest" href="manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#111111">
+    <meta name="theme-color" content="#000000">
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/@raruto/leaflet-elevation/dist/leaflet-elevation.css" />
 
     <style>
         :root { --bg: #0b0e14; --card: #161616; --accent: #00e676; --blue: #2979ff; --error: #ff5252; }
-        
-        /* THE "GAP KILLER" CSS */
         * { box-sizing: border-box; margin: 0 !important; padding: 0 !important; }
+        html, body { height: 100dvh; width: 100%; background: var(--bg); overflow: hidden; position: fixed; }
         
-        html, body { 
-            height: 100%; 
-            width: 100%;
-            background: var(--bg); /* Matching background to hide sub-pixel gaps */
-            overflow: hidden;
-            position: fixed; /* Prevents scrolling/bouncing which causes gaps */
-        }
-        
-        #map { 
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 60%; /* Top 60% */
-            background: #1a1a1a;
-            z-index: 1;
-        } 
-        
-        #display-area { 
-            position: absolute;
-            top: 60%;
-            bottom: 0; /* Forces it to touch the absolute bottom of the screen */
-            left: 0;
-            width: 100%;
-            background: var(--bg); 
-            border-top: 1px solid #222;
-            z-index: 2;
-        }
-
+        #map { position: absolute; top: 0; left: 0; width: 100%; height: 60%; background: #1a1a1a; z-index: 1; } 
+        #display-area { position: absolute; top: 60%; bottom: 0; left: 0; width: 100%; background: var(--bg); border-top: 1px solid #222; z-index: 2; }
         #elevation-div { height: 100%; width: 100%; background: var(--bg); }
 
-        /* REMOVE THE 'X' BUTTON */
-        .elevation-control .close-button, 
-        .elevation-control-close,
-        .elevation-toggle,
-        .leaflet-control-elevation .close-button,
-        a.close-button,
-        .elevation-control .elevation-summary { 
-            display: none !important; 
-            visibility: hidden !important; 
-            pointer-events: none !important;
+        /* HIDE 'X' BUTTON */
+        .elevation-control .close-button, .elevation-control-close, .elevation-toggle, .leaflet-control-elevation .close-button, a.close-button, .elevation-control .elevation-summary { 
+            display: none !important; visibility: hidden !important; pointer-events: none !important;
         }
 
-        /* DASHBOARD & CONTROLS */
         #live-dashboard {
             position: fixed; top: 10px; left: 10px; z-index: 3000;
             display: flex; flex-direction: column; gap: 6px; pointer-events: none;
         }
-        .live-card { 
-            background: rgba(0,0,0,0.8); padding: 8px 12px !important; border-radius: 8px; 
-            border-left: 4px solid var(--accent); font-family: sans-serif; color: white;
-        }
+        .live-card { background: rgba(0,0,0,0.8); padding: 8px 12px !important; border-radius: 8px; border-left: 4px solid var(--accent); font-family: sans-serif; color: white; }
         .live-val { font-weight: bold; color: var(--accent); font-size: 1.1rem; }
 
-        #controls {
-            position: fixed; top: 15%; right: 12px; z-index: 4000;
-            display: flex; flex-direction: column; gap: 12px;
-        }
-        .btn {
-            width: 42px; height: 42px; border-radius: 50%; border: none;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 1.2rem; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.6);
-            background: #222; color: white;
-        }
+        #controls { position: fixed; top: 15%; right: 12px; z-index: 4000; display: flex; flex-direction: column; gap: 12px; }
+        .btn { width: 42px; height: 42px; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; cursor: pointer; background: #222; color: white; }
         #toggleViewBtn { background: var(--blue); }
         #locateBtn { background: #fff; color: #000; }
         #startBtn { background: var(--accent); color: #000; }
         #stopBtn { background: var(--error); color: #fff; display: none; }
 
-        #text-summary-view { 
-            height: 100%; width: 100%; display: none;
-            grid-template-columns: 1fr 1fr; gap: 8px; padding: 15px !important;
-            background: var(--bg);
-        }
+        #text-summary-view { height: 100%; width: 100%; display: none; grid-template-columns: 1fr 1fr; gap: 8px; padding: 15px !important; background: var(--bg); }
         .summary-card { background: var(--card); border-radius: 10px; text-align: center; display: flex; flex-direction: column; justify-content: center; border-bottom: 2px solid #333; }
-        .summary-label { font-size: 0.65rem; color: #888; text-transform: uppercase; font-family: sans-serif; }
-        .summary-value { font-size: 1.2rem; font-weight: bold; color: var(--accent); font-family: sans-serif; }
+        .summary-label { font-size: 0.65rem; color: #888; text-transform: uppercase; }
+        .summary-value { font-size: 1.2rem; font-weight: bold; color: var(--accent); }
     </style>
 </head>
 <body>
 
+    <!-- Hidden Silent Audio for Background GPS -->
+    <audio id="silentAudio" loop><source src="data:audio/wav;base64,UklGRiQAAABXQVZFRm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=" type="audio/wav"></audio>
+
     <div id="live-dashboard">
         <div class="live-card"><span id="speed" class="live-val">0.0</span> km/h</div>
-        <div class="live-card"><span id="live-dist" class="live-val">0.00</span> km recorded</div>
+        <div class="live-card"><span id="live-dist" class="live-val">0.00</span> km</div>
     </div>
 
     <div id="controls">
@@ -114,7 +66,6 @@
     </div>
 
     <div id="map"></div>
-    
     <div id="display-area">
         <div id="elevation-div"></div>
         <div id="text-summary-view">
@@ -135,6 +86,7 @@
 
         let map, elControl, userMarker, watchId, polyline, recordedPoints = [];
         let isRecording = false, followMode = true, currentLatlng = null, totalDist = 0;
+        let wakeLock = null;
 
         map = L.map('map', { zoomControl: false, attributionControl: false }).setView([51.5, -0.1], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
@@ -144,7 +96,6 @@
             summary: false, responsive: true, maintainAspectRatio: false, closeBtn: false
         }).addTo(map);
 
-        // Aggressive 'X' removal
         const observer = new MutationObserver(() => {
             ['.close-button', '.elevation-control-close', '.elevation-toggle'].forEach(s => {
                 const el = document.querySelector(s); if (el) el.remove();
@@ -152,6 +103,43 @@
         });
         observer.observe(document.body, { childList: true, subtree: true });
 
+        // WAKE LOCK & AUDIO START (The Background Fix)
+        async function startRideShield() {
+            try {
+                // 1. Keep Screen On
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                }
+                // 2. Play Silent Audio (Keep Browser Alive)
+                document.getElementById('silentAudio').play();
+            } catch (err) { console.log("Shield Error: " + err); }
+        }
+
+        function stopRideShield() {
+            if (wakeLock !== null) { wakeLock.release(); wakeLock = null; }
+            document.getElementById('silentAudio').pause();
+        }
+
+        document.getElementById('startBtn').onclick = () => {
+            isRecording = true; recordedPoints = []; totalDist = 0;
+            if(polyline) map.removeLayer(polyline);
+            polyline = L.polyline([], {color: 'var(--accent)', weight: 5}).addTo(map);
+            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('stopBtn').style.display = 'flex';
+            startRideShield(); // ACTIVATE SHIELD
+        };
+
+        document.getElementById('stopBtn').onclick = () => {
+            if(confirm("Save ride?")) {
+                isRecording = false;
+                document.getElementById('startBtn').style.display = 'flex';
+                document.getElementById('stopBtn').style.display = 'none';
+                stopRideShield(); // DISABLE SHIELD
+                saveGPX();
+            }
+        };
+
+        // Standard logic remains below...
         document.getElementById('toggleViewBtn').onclick = () => {
             const g = document.getElementById('elevation-div'), t = document.getElementById('text-summary-view');
             const isG = g.style.display !== 'none';
@@ -191,23 +179,6 @@
             followMode = false; document.getElementById('locateBtn').style.background = "white";
             document.getElementById('locateBtn').style.color = "black";
         });
-
-        document.getElementById('startBtn').onclick = () => {
-            isRecording = true; recordedPoints = []; totalDist = 0;
-            if(polyline) map.removeLayer(polyline);
-            polyline = L.polyline([], {color: 'var(--accent)', weight: 5}).addTo(map);
-            document.getElementById('startBtn').style.display = 'none';
-            document.getElementById('stopBtn').style.display = 'flex';
-        };
-
-        document.getElementById('stopBtn').onclick = () => {
-            if(confirm("Save ride?")) {
-                isRecording = false;
-                document.getElementById('startBtn').style.display = 'flex';
-                document.getElementById('stopBtn').style.display = 'none';
-                saveGPX();
-            }
-        };
 
         document.getElementById('fileInput').onchange = (e) => {
             const reader = new FileReader();
