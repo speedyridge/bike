@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bike Nav</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Elevation CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/@raruto/leaflet-elevation/dist/leaflet-elevation.css" />
+
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; background: #121212; color: white; overflow: hidden; }
+        /* Give the map a specific height */
+        #map { height: 70vh; width: 100%; background: #222; } 
+        #elevation-div { height: 30vh; width: 100%; background: #1a1a1a; }
+        
+        #controls {
+            position: absolute; top: 10px; right: 10px; z-index: 1000;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        .btn {
+            background: #00e676; color: black; border: none; padding: 15px;
+            border-radius: 50%; font-size: 1.2rem; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+        #stats {
+            position: absolute; top: 10px; left: 10px; z-index: 1000;
+            background: rgba(0,0,0,0.7); padding: 10px; border-radius: 8px; font-family: sans-serif;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="stats">
+        <div id="speed">Speed: 0.0 km/h</div>
+        <div id="alt">Alt: --</div>
+    </div>
+
+    <div id="controls">
+        <label class="btn">📂<input type="file" id="fileInput" style="display:none" accept=".gpx"></label>
+        <button class="btn" id="trackBtn">📍</button>
+    </div>
+
+    <div id="map"></div>
+    <div id="elevation-div"></div>
+
+    <!-- Load Scripts in Order -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-gpx/gpx.js"></script>
+    <script src="https://unpkg.com/d3@7.8.5/dist/d3.min.js"></script>
+    <script src="https://unpkg.com/@raruto/leaflet-elevation/dist/leaflet-elevation.js"></script>
+
+    <script>
+        // 1. Setup Map - Using Standard OpenStreetMap Tiles (No Key Needed)
+        const map = L.map('map').setView([51.505, -0.09], 13);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // 2. Setup Elevation Chart
+        const el = L.control.elevation({
+            container: "#elevation-div",
+            theme: "dark-theme",
+            detached: true,
+        }).addTo(map);
+
+        // 3. File Loader
+        document.getElementById('fileInput').onchange = function(e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                el.clear();
+                el.load(evt.target.result);
+                // Wait a moment for data to process then fit bounds
+                setTimeout(() => {
+                    const bounds = el.getBounds();
+                    if (bounds) map.fitBounds(bounds);
+                }, 500);
+            };
+            reader.readAsText(file);
+        };
+
+        // 4. Tracker
+        let watchId = null;
+        const userMarker = L.circleMarker([0,0], {color: 'red'}).addTo(map);
+
+        document.getElementById('trackBtn').onclick = function() {
+            if (!watchId) {
+                this.style.background = "red";
+                watchId = navigator.geolocation.watchPosition(pos => {
+                    const {latitude, longitude, speed, altitude} = pos.coords;
+                    const latlng = [latitude, longitude];
+                    userMarker.setLatLng(latlng);
+                    map.panTo(latlng);
+                    document.getElementById('speed').innerText = `Speed: ${(speed * 3.6 || 0).toFixed(1)} km/h`;
+                    document.getElementById('alt').innerText = `Alt: ${altitude?.toFixed(0) || '--'}m`;
+                }, err => alert("Check GPS settings"), {enableHighAccuracy: true});
+            } else {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+                this.style.background = "#00e676";
+            }
+        };
+    </script>
+</body>
+</html>
